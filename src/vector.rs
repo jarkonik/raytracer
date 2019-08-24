@@ -80,33 +80,3 @@ impl ops::Sub for Vector {
         }
     }
 }
-
-pub fn collide(origin: Vector, dir: Vector, center: Vector, r: f64) -> Option<Vector> {
-    let l = center - origin;
-    let tca = l.dot(dir);
-    let d2 = l.dot(l) - tca * tca;
-
-    let r2 = r * r;
-
-    if d2 > r2 {
-        return None;
-    }
-
-    let thc = (r2 - d2).sqrt();
-
-    let mut t0 = tca - thc;
-    let mut t1 = tca + thc;
-
-    if t0 > t1 {
-        std::mem::swap(&mut t0, &mut t1);
-    }
-
-    if t0 < 0.0 {
-        t0 = t1;
-        if t0 < 0.0 {
-            return None;
-        }
-    }
-
-    return Some(origin + dir * t0);
-}
