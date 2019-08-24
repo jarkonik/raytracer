@@ -5,13 +5,17 @@ use vector::{Matrix4, Vector3};
 
 const EYE: Vector3 = Vector3 {
     x: 0.0,
-    y: 80.0,
-    z: 100.0,
+    y: 120.0,
+    z: 150.0,
 };
 
 trait Collider: std::fmt::Debug {
     fn collide(&self, origin: Vector3, dir: Vector3) -> Option<CollisionData>;
     fn color(&self) -> Vector3;
+}
+
+fn reflect(i: Vector3, n: Vector3) -> Vector3 {
+    return i - 2.0 * i.dot(n) * n;
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -110,13 +114,13 @@ impl Collider for Sphere {
     }
 }
 
-const VIEW_PLANE_DIST: f64 = 400.0;
+const VIEW_PLANE_DIST: f64 = 800.0;
 const IMG_WIDTH: u32 = 800;
 const IMG_HEIGHT: u32 = 800;
 const LIGHT_POINT: Vector3 = Vector3 {
-    x: -500.0,
-    y: 1000.0,
-    z: 100.0,
+    x: 150.0,
+    y: 120.0,
+    z: -20.0,
 };
 
 #[derive(Debug)]
@@ -139,24 +143,11 @@ fn main() {
                     z: 0.0,
                 },
                 color: Vector3 {
-                    x: 255.0,
+                    x: 0.0,
                     y: 0.0,
                     z: 255.0,
                 },
                 offset: -50.0,
-            }),
-            std::rc::Rc::new(Plane {
-                normal: Vector3 {
-                    x: 0.0,
-                    y: 0.0,
-                    z: 1.0,
-                },
-                color: Vector3 {
-                    x: 0.0,
-                    y: 0.0,
-                    z: 255.0,
-                },
-                offset: -500.0,
             }),
             std::rc::Rc::new(Sphere {
                 center: Vector3 {
@@ -243,9 +234,25 @@ fn main() {
         }
 
         let albedo = closest_collision.object.color();
-        let diffuse = albedo * f64::max(0.0, closest_collision.data.normal.dot(light_dir));
 
-        let color = diffuse;
+        let normal = closest_collision.data.normal;
+
+        let attenuation = 1.0 / ((closest_collision.data.hit_point - LIGHT_POINT).magnitude());
+        let light_intenisty = attenuation * 100.0;
+
+        let diffuse = light_intenisty * albedo * f64::max(0.0, normal.dot(light_dir));
+
+        let reflection = reflect(light_dir, normal);
+
+        let specular = attenuation * f64::max(0.0, reflection.dot(-ray_dir)).powf(2.0);
+
+        let color = diffuse
+            + Vector3 {
+                x: 255.0,
+                y: 255.0,
+                z: 255.0,
+            } * specular
+                * 0.1;
 
         *pixel = image::Rgb([color.x as u8, color.y as u8, color.z as u8]);
     }

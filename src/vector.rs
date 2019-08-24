@@ -104,6 +104,18 @@ impl ops::Add<Vector3> for Vector3 {
     }
 }
 
+impl ops::Mul<Vector3> for f64 {
+    type Output = Vector3;
+
+    fn mul(self, rhs: Vector3) -> Vector3 {
+        Vector3 {
+            x: self * rhs.x,
+            y: self * rhs.y,
+            z: self * rhs.z,
+        }
+    }
+}
+
 impl ops::Mul<f64> for Vector3 {
     type Output = Vector3;
 
