@@ -1,43 +1,55 @@
 extern crate image;
 
 mod vector;
-use vector::Vector;
+use vector::{Matrix4, Vector3};
 
-const EYE: Vector = Vector {
+const EYE: Vector3 = Vector3 {
     x: 0.0,
-    y: 0.0,
-    z: 10.0,
+    y: 80.0,
+    z: 100.0,
 };
 
 trait Collider: std::fmt::Debug {
-    fn collide(&self, origin: Vector, dir: Vector) -> Option<Vector>;
-    fn color(&self) -> [u8; 3];
+    fn collide(&self, origin: Vector3, dir: Vector3) -> Option<CollisionData>;
+    fn color(&self) -> Vector3;
 }
 
 #[derive(Copy, Clone, Debug)]
 struct Sphere {
-    center: Vector,
+    center: Vector3,
     radius: f64,
-    color: [u8; 3],
+    color: Vector3,
 }
 
 #[derive(Copy, Clone, Debug)]
 struct Plane {
-    normal: Vector,
+    normal: Vector3,
     offset: f64,
-    color: [u8; 3],
+    color: Vector3,
+}
+
+#[derive(Debug)]
+struct CollisionData {
+    hit_point: Vector3,
+    normal: Vector3,
+    distance: f64,
 }
 
 impl Collider for Plane {
-    fn collide(&self, origin: Vector, dir: Vector) -> Option<Vector> {
-        let denom = self.normal.dot(dir);
+    fn collide(&self, origin: Vector3, dir: Vector3) -> Option<CollisionData> {
+        let denom = (-self.normal).dot(dir);
 
         if denom > std::f64::EPSILON {
             let p0l0 = (self.normal * self.offset) - origin;
-            let t = p0l0.dot(self.normal) / denom;
+            let t = p0l0.dot(-self.normal) / denom;
 
             if t >= 0.0 {
-                return Some(origin + dir * t);
+                let hit_point = origin + dir * t;
+                return Some(CollisionData {
+                    hit_point: hit_point,
+                    distance: (hit_point - origin).magnitude(),
+                    normal: self.normal,
+                });
             } else {
                 return None;
             }
@@ -46,13 +58,13 @@ impl Collider for Plane {
         }
     }
 
-    fn color(&self) -> [u8; 3] {
+    fn color(&self) -> Vector3 {
         return self.color;
     }
 }
 
 impl Collider for Sphere {
-    fn collide(&self, origin: Vector, dir: Vector) -> Option<Vector> {
+    fn collide(&self, origin: Vector3, dir: Vector3) -> Option<CollisionData> {
         let l = self.center - origin;
         let tca = l.dot(dir);
 
@@ -84,10 +96,16 @@ impl Collider for Sphere {
             }
         }
 
-        return Some(origin + dir * t0);
+        let hit_point = origin + dir * t0;
+
+        return Some(CollisionData {
+            hit_point: hit_point,
+            distance: (hit_point - origin).magnitude(),
+            normal: (hit_point - self.center).normalize(),
+        });
     }
 
-    fn color(&self) -> [u8; 3] {
+    fn color(&self) -> Vector3 {
         return self.color;
     }
 }
@@ -95,17 +113,16 @@ impl Collider for Sphere {
 const VIEW_PLANE_DIST: f64 = 400.0;
 const IMG_WIDTH: u32 = 800;
 const IMG_HEIGHT: u32 = 800;
-const LIGHT_POINT: Vector = Vector {
-    x: 0.0,
-    y: 500.0,
-    z: 0.0,
+const LIGHT_POINT: Vector3 = Vector3 {
+    x: -500.0,
+    y: 1000.0,
+    z: 100.0,
 };
 
 #[derive(Debug)]
 struct Collision {
-    distance: f64,
+    data: CollisionData,
     object: std::rc::Rc<dyn Collider>,
-    hit_point: Vector,
 }
 
 struct World {
@@ -116,53 +133,84 @@ fn main() {
     let world = World {
         objects: vec![
             std::rc::Rc::new(Plane {
-                normal: Vector {
+                normal: Vector3 {
                     x: 0.0,
                     y: 1.0,
                     z: 0.0,
                 },
-                color: [0, 0, 255],
-                offset: 50.0,
+                color: Vector3 {
+                    x: 255.0,
+                    y: 0.0,
+                    z: 255.0,
+                },
+                offset: -50.0,
+            }),
+            std::rc::Rc::new(Plane {
+                normal: Vector3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 1.0,
+                },
+                color: Vector3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 255.0,
+                },
+                offset: -500.0,
             }),
             std::rc::Rc::new(Sphere {
-                center: Vector {
-                    x: 0.0,
+                center: Vector3 {
+                    x: -50.0,
                     y: 0.0,
                     z: -150.0,
                 },
-                color: [255, 0, 0],
+                color: Vector3 {
+                    x: 255.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
                 radius: 50.0,
             }),
             std::rc::Rc::new(Sphere {
-                center: Vector {
+                center: Vector3 {
                     x: 50.0,
                     y: 0.0,
                     z: -60.0,
                 },
-                color: [0, 255, 0],
+                color: Vector3 {
+                    x: 0.0,
+                    y: 255.0,
+                    z: 0.0,
+                },
                 radius: 50.0,
             }),
         ],
     };
     let mut imgbuf = image::ImageBuffer::new(IMG_WIDTH, IMG_HEIGHT);
 
+    let rot: f64 = -30.0;
+
+    let eye_rot = Matrix4::x_rot(rot.to_radians());
+    println!("{:?}", eye_rot);
+
     for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
-        let ray_dir = Vector {
+        let view_dir = Vector3 {
             x: (x as f64) - (IMG_WIDTH as f64) / 2.0,
-            y: (y as f64) - (IMG_HEIGHT as f64) / 2.0,
+            y: (IMG_HEIGHT as f64) / 2.0 - (y as f64),
             z: -VIEW_PLANE_DIST,
         }
         .normalize();
+
+        let ray_dir = view_dir * eye_rot;
 
         let collisions: Vec<Collision> = world
             .objects
             .iter()
             .filter_map(|object| {
-                let hit_point = object.collide(EYE, ray_dir);
-                match hit_point {
-                    Some(point) => Some(Collision {
-                        distance: (point - EYE).magnitude(),
-                        hit_point: point,
+                let data = object.collide(EYE, ray_dir);
+                match data {
+                    Some(data) => Some(Collision {
+                        data: data,
                         object: object.clone(),
                     }),
                     None => None,
@@ -175,19 +223,18 @@ fn main() {
         }
 
         let closest_collision = collisions.iter().fold(&collisions[0], |acc, collision| {
-            if collision.distance < acc.distance {
+            if collision.data.distance < acc.data.distance {
                 collision
             } else {
                 acc
             }
         });
 
+        let light_dir = (LIGHT_POINT - closest_collision.data.hit_point).normalize();
+
         let in_shadow = world.objects.iter().any(|object| {
             object
-                .collide(
-                    closest_collision.hit_point,
-                    (closest_collision.hit_point - LIGHT_POINT).normalize(),
-                )
+                .collide(closest_collision.data.hit_point, light_dir)
                 .is_some()
         });
 
@@ -195,9 +242,12 @@ fn main() {
             continue;
         }
 
-        let color = closest_collision.object.color();
+        let albedo = closest_collision.object.color();
+        let diffuse = albedo * f64::max(0.0, closest_collision.data.normal.dot(light_dir));
 
-        *pixel = image::Rgb(color);
+        let color = diffuse;
+
+        *pixel = image::Rgb([color.x as u8, color.y as u8, color.z as u8]);
     }
 
     imgbuf.save("test.png").unwrap();
