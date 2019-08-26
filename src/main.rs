@@ -1,7 +1,9 @@
 #![feature(clamp)]
 extern crate image;
+extern crate rand;
 
 mod vector;
+use rand::prelude::*;
 use vector::{Matrix4, Vector3};
 
 const EYE: Vector3 = Vector3 {
@@ -144,7 +146,13 @@ struct World {
     pub objects: Vec<std::rc::Rc<dyn Collider>>,
 }
 
-fn get_color(origin: Vector3, world: &World, ray_dir: Vector3, depth: u8) -> Vector3 {
+fn get_color(
+    rnd: &mut ThreadRng,
+    origin: Vector3,
+    world: &World,
+    ray_dir: Vector3,
+    depth: u8,
+) -> Vector3 {
     if depth > 1 {
         return Vector3 {
             x: 0.0,
@@ -186,42 +194,48 @@ fn get_color(origin: Vector3, world: &World, ray_dir: Vector3, depth: u8) -> Vec
 
     let light_dir = (LIGHT_POINT - closest_collision.data.hit_point).normalize();
 
-    let in_shadow = world.objects.iter().any(|object| {
-        object
-            .collide(closest_collision.data.hit_point, light_dir)
-            .is_some()
-    });
+    let shadow = (1..10)
+        .filter(|_| {
+            world.objects.iter().any(|object| {
+                let jitter = 0.02
+                    * Vector3 {
+                        x: rnd.gen::<f64>() - 0.5,
+                        y: rnd.gen::<f64>() - 0.5,
+                        z: rnd.gen::<f64>() - 0.5,
+                    };
+                object
+                    .collide(
+                        closest_collision.data.hit_point,
+                        (light_dir + jitter).normalize(),
+                    )
+                    .is_some()
+            })
+        })
+        .count();
 
     let albedo = closest_collision.object.color();
 
     let normal = closest_collision.data.normal;
 
-    let light_intenisty = 1.0;
+    let light_intenisty = 1.0 - (shadow as f64 / 10.0);
     let diffuse = (light_intenisty * f64::max(0.0, normal.dot(light_dir))) * albedo;
 
     let reflection = reflect(light_dir, normal);
 
     let specular = light_intenisty * f64::max(0.0, reflection.dot(-ray_dir)).powf(10.0);
 
-    let color = if in_shadow {
-        Vector3 {
-            x: 0.0,
-            y: 0.0,
-            z: 0.0,
-        }
-    } else {
-        diffuse
-            + Vector3 {
-                x: 255.0,
-                y: 255.0,
-                z: 255.0,
-            } * specular
-                * 0.5
-    };
+    let color = diffuse
+        + Vector3 {
+            x: 255.0,
+            y: 255.0,
+            z: 255.0,
+        } * specular
+            * 0.5;
 
     let color = color * (1.0 - closest_collision.object.reflectivity())
         + closest_collision.object.reflectivity()
             * get_color(
+                rnd,
                 closest_collision.data.hit_point,
                 world,
                 reflection,
@@ -318,6 +332,8 @@ fn main() {
     let eye_rot = Matrix4::x_rot(rot.to_radians());
     println!("{:?}", eye_rot);
 
+    let mut rnd = rand::thread_rng();
+
     for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
         let view_dir = Vector3 {
             x: (x as f64) - (IMG_SIZE as f64) / 2.0,
@@ -328,7 +344,7 @@ fn main() {
 
         let ray_dir = view_dir * eye_rot;
 
-        let color = get_color(EYE, &world, ray_dir, 0);
+        let color = get_color(&mut rnd, EYE, &world, ray_dir, 0);
 
         *pixel = image::Rgb([color.x as u8, color.y as u8, color.z as u8]);
     }
