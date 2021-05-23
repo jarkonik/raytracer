@@ -1,9 +1,9 @@
-#![feature(clamp)]
 extern crate image;
 extern crate rand;
 
 mod vector;
 use rand::prelude::*;
+use rayon::prelude::*;
 use vector::{Matrix4, Vector3};
 
 const EYE: Vector3 = Vector3 {
@@ -18,7 +18,7 @@ const LIGHT_POINT: Vector3 = Vector3 {
     z: 90.0,
 };
 
-trait Collider: std::fmt::Debug {
+trait Collider: Send + Sync {
     fn collide(&self, origin: Vector3, dir: Vector3) -> Option<CollisionData>;
     fn color(&self) -> Vector3;
     fn reflectivity(&self) -> f64;
@@ -136,23 +136,19 @@ impl Collider for Sphere {
 
 const IMG_SIZE: u32 = 800;
 
-#[derive(Debug)]
 struct Collision {
     data: CollisionData,
-    object: std::rc::Rc<dyn Collider>,
-}
-
-struct World {
-    pub objects: Vec<std::rc::Rc<dyn Collider>>,
+    object: std::sync::Arc<dyn Collider>,
 }
 
 fn get_color(
-    rnd: &mut ThreadRng,
     origin: Vector3,
-    world: &World,
+    objects: &Box<[std::sync::Arc<dyn Collider>]>,
     ray_dir: Vector3,
     depth: u8,
 ) -> Vector3 {
+    let mut rnd = rand::thread_rng();
+
     if depth > 1 {
         return Vector3 {
             x: 0.0,
@@ -161,8 +157,7 @@ fn get_color(
         };
     }
 
-    let collisions: Vec<Collision> = world
-        .objects
+    let collisions: Vec<Collision> = objects
         .iter()
         .filter_map(|object| {
             let data = object.collide(origin, ray_dir);
@@ -196,7 +191,7 @@ fn get_color(
 
     let shadow = (1..10)
         .filter(|_| {
-            world.objects.iter().any(|object| {
+            objects.iter().any(|object| {
                 let jitter = 0.02
                     * Vector3 {
                         x: rnd.gen::<f64>() - 0.5,
@@ -235,9 +230,8 @@ fn get_color(
     let color = color * (1.0 - closest_collision.object.reflectivity())
         + closest_collision.object.reflectivity()
             * get_color(
-                rnd,
                 closest_collision.data.hit_point,
-                world,
+                objects,
                 reflection,
                 depth + 1,
             );
@@ -251,101 +245,108 @@ fn get_color(
 }
 
 fn main() {
-    let world = World {
-        objects: vec![
-            std::rc::Rc::new(Plane {
-                reflectivity: 0.1,
-                normal: Vector3 {
-                    x: 0.0,
-                    y: 0.0,
-                    z: 1.0,
-                },
-                color: Vector3 {
-                    x: 255.0,
-                    y: 255.0,
-                    z: 255.0,
-                },
-                offset: -300.0,
-            }),
-            std::rc::Rc::new(Plane {
-                reflectivity: 0.1,
-                normal: Vector3 {
-                    x: 0.0,
-                    y: 1.0,
-                    z: 0.0,
-                },
-                color: Vector3 {
-                    x: 255.0,
-                    y: 255.0,
-                    z: 255.0,
-                },
-                offset: -50.0,
-            }),
-            std::rc::Rc::new(Sphere {
-                reflectivity: 0.3,
-                center: Vector3 {
-                    x: -20.0,
-                    y: 0.0,
-                    z: -150.0,
-                },
-                color: Vector3 {
-                    x: 255.0,
-                    y: 0.0,
-                    z: 0.0,
-                },
-                radius: 50.0,
-            }),
-            std::rc::Rc::new(Sphere {
-                reflectivity: 0.0,
-                center: Vector3 {
-                    x: 50.0,
-                    y: 0.0,
-                    z: -40.0,
-                },
-                color: Vector3 {
-                    x: 0.0,
-                    y: 255.0,
-                    z: 0.0,
-                },
-                radius: 50.0,
-            }),
-            std::rc::Rc::new(Sphere {
-                reflectivity: 0.3,
-                center: Vector3 {
-                    x: -75.0,
-                    y: 0.0,
-                    z: -50.0,
-                },
-                color: Vector3 {
-                    x: 0.0,
-                    y: 0.0,
-                    z: 255.0,
-                },
-                radius: 50.0,
-            }),
-        ],
-    };
-    let mut imgbuf = image::ImageBuffer::new(IMG_SIZE, IMG_SIZE);
+    let objects: Box<[std::sync::Arc<dyn Collider>]> = Box::new([
+        std::sync::Arc::new(Plane {
+            reflectivity: 0.1,
+            normal: Vector3 {
+                x: 0.0,
+                y: 0.0,
+                z: 1.0,
+            },
+            color: Vector3 {
+                x: 255.0,
+                y: 255.0,
+                z: 255.0,
+            },
+            offset: -300.0,
+        }),
+        std::sync::Arc::new(Plane {
+            reflectivity: 0.1,
+            normal: Vector3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
+            color: Vector3 {
+                x: 255.0,
+                y: 255.0,
+                z: 255.0,
+            },
+            offset: -50.0,
+        }),
+        std::sync::Arc::new(Sphere {
+            reflectivity: 0.3,
+            center: Vector3 {
+                x: -20.0,
+                y: 0.0,
+                z: -150.0,
+            },
+            color: Vector3 {
+                x: 255.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            radius: 50.0,
+        }),
+        std::sync::Arc::new(Sphere {
+            reflectivity: 0.0,
+            center: Vector3 {
+                x: 50.0,
+                y: 0.0,
+                z: -40.0,
+            },
+            color: Vector3 {
+                x: 0.0,
+                y: 255.0,
+                z: 0.0,
+            },
+            radius: 50.0,
+        }),
+        std::sync::Arc::new(Sphere {
+            reflectivity: 0.3,
+            center: Vector3 {
+                x: -75.0,
+                y: 0.0,
+                z: -50.0,
+            },
+            color: Vector3 {
+                x: 0.0,
+                y: 0.0,
+                z: 255.0,
+            },
+            radius: 50.0,
+        }),
+    ]);
 
     let rot: f64 = -45.0;
 
     let eye_rot = Matrix4::x_rot(rot.to_radians());
     println!("{:?}", eye_rot);
 
-    let mut rnd = rand::thread_rng();
+    let rows: Vec<Vec<_>> = (0..IMG_SIZE)
+        .into_par_iter()
+        .map(|y| {
+            return (0..IMG_SIZE)
+                .map(|x| {
+                    let view_dir = Vector3 {
+                        x: (x as f64) - (IMG_SIZE as f64) / 2.0,
+                        y: (IMG_SIZE as f64) / 2.0 - (y as f64),
+                        z: -(IMG_SIZE as f64),
+                    }
+                    .normalize();
+
+                    let ray_dir = view_dir * eye_rot;
+
+                    return get_color(EYE, &objects, ray_dir, 0);
+                })
+                .collect();
+        })
+        .collect();
+
+    let mut imgbuf = image::ImageBuffer::new(IMG_SIZE, IMG_SIZE);
 
     for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
-        let view_dir = Vector3 {
-            x: (x as f64) - (IMG_SIZE as f64) / 2.0,
-            y: (IMG_SIZE as f64) / 2.0 - (y as f64),
-            z: -(IMG_SIZE as f64),
-        }
-        .normalize();
-
-        let ray_dir = view_dir * eye_rot;
-
-        let color = get_color(&mut rnd, EYE, &world, ray_dir, 0);
-
+        let color = rows[y as usize][x as usize];
         *pixel = image::Rgb([color.x as u8, color.y as u8, color.z as u8]);
     }
 
