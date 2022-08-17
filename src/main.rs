@@ -375,7 +375,7 @@ fn main() {
                     - Vector3 {
                         x: 0.,
                         y: 0.,
-                        z: 1.,
+                        z: 10.,
                     }
             }
             Key::S => {
@@ -383,13 +383,13 @@ fn main() {
                     + Vector3 {
                         x: 0.,
                         y: 0.,
-                        z: 1.,
+                        z: 10.,
                     }
             }
             Key::A => {
                 eye = eye
                     - Vector3 {
-                        x: 1.,
+                        x: 10.,
                         y: 0.,
                         z: 0.,
                     }
@@ -397,7 +397,7 @@ fn main() {
             Key::D => {
                 eye = eye
                     + Vector3 {
-                        x: 1.,
+                        x: 10.,
                         y: 0.,
                         z: 0.,
                     }
