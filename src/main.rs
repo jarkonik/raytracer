@@ -362,13 +362,12 @@ fn main() {
             })
             .collect();
 
-        let buffer: Vec<u32> = rows
-            .iter()
-            .flat_map(|row| {
-                row.iter()
-                    .map(|v| (((v.x) as u32) << 16) | ((((v.y) as u32) << 8) | ((v.z) as u32)))
-            })
-            .collect();
+        rows.iter().enumerate().for_each(|(y, row)| {
+            row.iter().enumerate().for_each(|(x, v)| {
+                let index = (y * (IMG_SIZE as usize) + x) as usize;
+                buffer[index] = (((v.x) as u32) << 16) | ((((v.y) as u32) << 8) | ((v.z) as u32));
+            });
+        });
 
         window.get_keys().iter().for_each(|key| match key {
             Key::W => {
@@ -385,6 +384,22 @@ fn main() {
                         x: 0.,
                         y: 0.,
                         z: 1.,
+                    }
+            }
+            Key::A => {
+                eye = eye
+                    - Vector3 {
+                        x: 1.,
+                        y: 0.,
+                        z: 0.,
+                    }
+            }
+            Key::D => {
+                eye = eye
+                    + Vector3 {
+                        x: 1.,
+                        y: 0.,
+                        z: 0.,
                     }
             }
             _ => (),
