@@ -7,12 +7,6 @@ use rand::prelude::*;
 use rayon::prelude::*;
 use vector::{Matrix4, Vector3};
 
-const EYE: Vector3 = Vector3 {
-    x: 0.0,
-    y: 180.0,
-    z: 110.0,
-};
-
 const LIGHT_POINT: Vector3 = Vector3 {
     x: -50.0,
     y: 50.0,
@@ -246,6 +240,12 @@ fn get_color(
 }
 
 fn main() {
+    let mut eye: Vector3 = Vector3 {
+        x: 0.0,
+        y: 180.0,
+        z: 110.0,
+    };
+
     let objects: Vec<Box<dyn Collider>> = vec![
         Box::new(Plane {
             reflectivity: 0.1,
@@ -324,26 +324,6 @@ fn main() {
     let eye_rot = Matrix4::x_rot(rot.to_radians());
     println!("{:?}", eye_rot);
 
-    let rows: Vec<Vec<_>> = (0..IMG_SIZE)
-        .into_par_iter()
-        .map(|y| {
-            return (0..IMG_SIZE)
-                .map(|x| {
-                    let view_dir = Vector3 {
-                        x: (x as f64) - (IMG_SIZE as f64) / 2.0,
-                        y: (IMG_SIZE as f64) / 2.0 - (y as f64),
-                        z: -(IMG_SIZE as f64),
-                    }
-                    .normalize();
-
-                    let ray_dir = view_dir * eye_rot;
-
-                    return get_color(EYE, &objects, ray_dir, 0);
-                })
-                .collect();
-        })
-        .collect();
-
     let mut window = Window::new(
         "Noise Test - Press ESC to exit",
         IMG_SIZE as usize,
@@ -359,22 +339,54 @@ fn main() {
     // Limit to max ~60 fps update rate
     window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
 
-    let mut size = (0, 0);
-
-    let buffer: Vec<u32> = rows
-        .iter()
-        .flat_map(|row| {
-            row.iter().map(|v| {
-                (((v.x * 255.) as u32) << 16)
-                    | ((((v.y * 255.) as u32) << 8) | ((v.z * 255.) as u32))
-            })
-        })
-        .collect();
+    let mut buffer: Vec<u32> = vec![0; (IMG_SIZE * IMG_SIZE) as usize];
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
+        let rows: Vec<Vec<_>> = (0..IMG_SIZE)
+            .into_par_iter()
+            .map(|y| {
+                return (0..IMG_SIZE)
+                    .map(|x| {
+                        let view_dir = Vector3 {
+                            x: (x as f64) - (IMG_SIZE as f64) / 2.0,
+                            y: (IMG_SIZE as f64) / 2.0 - (y as f64),
+                            z: -(IMG_SIZE as f64),
+                        }
+                        .normalize();
+
+                        let ray_dir = view_dir * eye_rot;
+
+                        return get_color(eye, &objects, ray_dir, 0);
+                    })
+                    .collect();
+            })
+            .collect();
+
+        let buffer: Vec<u32> = rows
+            .iter()
+            .flat_map(|row| {
+                row.iter()
+                    .map(|v| (((v.x) as u32) << 16) | ((((v.y) as u32) << 8) | ((v.z) as u32)))
+            })
+            .collect();
+
         window.get_keys().iter().for_each(|key| match key {
-            Key::W => println!("holding w!"),
-            Key::T => println!("holding t!"),
+            Key::W => {
+                eye = eye
+                    - Vector3 {
+                        x: 0.,
+                        y: 0.,
+                        z: 1.,
+                    }
+            }
+            Key::S => {
+                eye = eye
+                    + Vector3 {
+                        x: 0.,
+                        y: 0.,
+                        z: 1.,
+                    }
+            }
             _ => (),
         });
 
