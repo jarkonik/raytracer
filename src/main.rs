@@ -2,7 +2,7 @@ extern crate image;
 extern crate rand;
 
 mod vector;
-use minifb::{Key, Window, WindowOptions};
+use minifb::{Key, ScaleMode, Window, WindowOptions};
 use rand::prelude::*;
 use rayon::prelude::*;
 use vector::{Matrix4, Vector3};
@@ -344,34 +344,46 @@ fn main() {
         })
         .collect();
 
-    // let mut imgbuf = image::ImageBuffer::new(IMG_SIZE, IMG_SIZE);
-
-    // for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
-    //     let color = rows[y as usize][x as usize];
-    //     *pixel = image::Rgb([color.x as u8, color.y as u8, color.z as u8]);
-    // }
-
-    let mut buffer: Vec<u32> = vec![0; (IMG_SIZE * IMG_SIZE) as usize];
-
     let mut window = Window::new(
-        "Test - ESC to exit",
+        "Noise Test - Press ESC to exit",
         IMG_SIZE as usize,
         IMG_SIZE as usize,
-        WindowOptions::default(),
+        WindowOptions {
+            resize: true,
+            scale_mode: ScaleMode::UpperLeft,
+            ..WindowOptions::default()
+        },
     )
-    .unwrap_or_else(|e| {
-        panic!("{}", e);
-    });
+    .expect("Unable to create window");
 
     // Limit to max ~60 fps update rate
     window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
 
-    while window.is_open() && !window.is_key_down(Key::Escape) {
-        for i in buffer.iter_mut() {
-            *i = 0; // write something more funny here!
-        }
+    let mut size = (0, 0);
 
-        // We unwrap here as we want this code to exit if it fails. Real applications may want to handle this in a different way
+    let buffer: Vec<u32> = rows
+        .iter()
+        .flat_map(|row| {
+            row.iter().map(|v| {
+                (((v.x * 255.) as u32) << 16)
+                    | ((((v.y * 255.) as u32) << 8) | ((v.z * 255.) as u32))
+            })
+        })
+        .collect();
+
+    while window.is_open() && !window.is_key_down(Key::Escape) {
+        window.get_keys().iter().for_each(|key| match key {
+            Key::W => println!("holding w!"),
+            Key::T => println!("holding t!"),
+            _ => (),
+        });
+
+        window.get_keys_released().iter().for_each(|key| match key {
+            Key::W => println!("released w!"),
+            Key::T => println!("released t!"),
+            _ => (),
+        });
+
         window
             .update_with_buffer(&buffer, IMG_SIZE as usize, IMG_SIZE as usize)
             .unwrap();
