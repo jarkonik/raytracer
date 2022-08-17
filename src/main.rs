@@ -28,7 +28,7 @@ fn reflect(i: Vector3, n: Vector3) -> Vector3 {
     return 2.0 * i.dot(n) * n - i;
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Debug)]
 struct Sphere {
     center: Vector3,
     radius: f64,
@@ -36,7 +36,7 @@ struct Sphere {
     reflectivity: f64,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Debug)]
 struct Plane {
     normal: Vector3,
     offset: f64,
@@ -136,14 +136,14 @@ impl Collider for Sphere {
 
 const IMG_SIZE: u32 = 800;
 
-struct Collision {
+struct Collision<'a> {
     data: CollisionData,
-    object: std::sync::Arc<dyn Collider>,
+    object: &'a Box<dyn Collider>,
 }
 
 fn get_color(
     origin: Vector3,
-    objects: &Box<[std::sync::Arc<dyn Collider>]>,
+    objects: &Vec<Box<dyn Collider>>,
     ray_dir: Vector3,
     depth: u8,
 ) -> Vector3 {
@@ -164,7 +164,7 @@ fn get_color(
             match data {
                 Some(data) => Some(Collision {
                     data: data,
-                    object: object.clone(),
+                    object: &*object,
                 }),
                 None => None,
             }
@@ -245,8 +245,8 @@ fn get_color(
 }
 
 fn main() {
-    let objects: Box<[std::sync::Arc<dyn Collider>]> = Box::new([
-        std::sync::Arc::new(Plane {
+    let objects: Vec<Box<dyn Collider>> = vec![
+        Box::new(Plane {
             reflectivity: 0.1,
             normal: Vector3 {
                 x: 0.0,
@@ -260,7 +260,7 @@ fn main() {
             },
             offset: -300.0,
         }),
-        std::sync::Arc::new(Plane {
+        Box::new(Plane {
             reflectivity: 0.1,
             normal: Vector3 {
                 x: 0.0,
@@ -274,7 +274,7 @@ fn main() {
             },
             offset: -50.0,
         }),
-        std::sync::Arc::new(Sphere {
+        Box::new(Sphere {
             reflectivity: 0.3,
             center: Vector3 {
                 x: -20.0,
@@ -288,7 +288,7 @@ fn main() {
             },
             radius: 50.0,
         }),
-        std::sync::Arc::new(Sphere {
+        Box::new(Sphere {
             reflectivity: 0.0,
             center: Vector3 {
                 x: 50.0,
@@ -302,7 +302,7 @@ fn main() {
             },
             radius: 50.0,
         }),
-        std::sync::Arc::new(Sphere {
+        Box::new(Sphere {
             reflectivity: 0.3,
             center: Vector3 {
                 x: -75.0,
@@ -316,7 +316,7 @@ fn main() {
             },
             radius: 50.0,
         }),
-    ]);
+    ];
 
     let rot: f64 = -45.0;
 
