@@ -2,6 +2,7 @@ extern crate image;
 extern crate rand;
 
 mod vector;
+use minifb::{Key, Window, WindowOptions};
 use rand::prelude::*;
 use rayon::prelude::*;
 use vector::{Matrix4, Vector3};
@@ -343,12 +344,36 @@ fn main() {
         })
         .collect();
 
-    let mut imgbuf = image::ImageBuffer::new(IMG_SIZE, IMG_SIZE);
+    // let mut imgbuf = image::ImageBuffer::new(IMG_SIZE, IMG_SIZE);
 
-    for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
-        let color = rows[y as usize][x as usize];
-        *pixel = image::Rgb([color.x as u8, color.y as u8, color.z as u8]);
+    // for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
+    //     let color = rows[y as usize][x as usize];
+    //     *pixel = image::Rgb([color.x as u8, color.y as u8, color.z as u8]);
+    // }
+
+    let mut buffer: Vec<u32> = vec![0; (IMG_SIZE * IMG_SIZE) as usize];
+
+    let mut window = Window::new(
+        "Test - ESC to exit",
+        IMG_SIZE as usize,
+        IMG_SIZE as usize,
+        WindowOptions::default(),
+    )
+    .unwrap_or_else(|e| {
+        panic!("{}", e);
+    });
+
+    // Limit to max ~60 fps update rate
+    window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
+
+    while window.is_open() && !window.is_key_down(Key::Escape) {
+        for i in buffer.iter_mut() {
+            *i = 0; // write something more funny here!
+        }
+
+        // We unwrap here as we want this code to exit if it fails. Real applications may want to handle this in a different way
+        window
+            .update_with_buffer(&buffer, IMG_SIZE as usize, IMG_SIZE as usize)
+            .unwrap();
     }
-
-    imgbuf.save("test.png").unwrap();
 }
