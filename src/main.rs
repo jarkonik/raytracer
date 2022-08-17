@@ -192,7 +192,7 @@ fn get_color(
     let shadow = (1..10)
         .filter(|_| {
             objects.iter().any(|object| {
-                let jitter = 0.02
+                let jitter = 0.002
                     * Vector3 {
                         x: rnd.gen::<f64>() - 0.5,
                         y: rnd.gen::<f64>() - 0.5,
