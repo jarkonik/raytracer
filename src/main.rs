@@ -2,15 +2,10 @@ extern crate image;
 extern crate rand;
 
 mod vector;
+use minifb::{Key, ScaleMode, Window, WindowOptions};
 use rand::prelude::*;
 use rayon::prelude::*;
 use vector::{Matrix4, Vector3};
-
-const EYE: Vector3 = Vector3 {
-    x: 0.0,
-    y: 180.0,
-    z: 110.0,
-};
 
 const LIGHT_POINT: Vector3 = Vector3 {
     x: -50.0,
@@ -245,6 +240,12 @@ fn get_color(
 }
 
 fn main() {
+    let mut eye: Vector3 = Vector3 {
+        x: 0.0,
+        y: 180.0,
+        z: 110.0,
+    };
+
     let objects: Vec<Box<dyn Collider>> = vec![
         Box::new(Plane {
             reflectivity: 0.1,
@@ -323,32 +324,95 @@ fn main() {
     let eye_rot = Matrix4::x_rot(rot.to_radians());
     println!("{:?}", eye_rot);
 
-    let rows: Vec<Vec<_>> = (0..IMG_SIZE)
-        .into_par_iter()
-        .map(|y| {
-            return (0..IMG_SIZE)
-                .map(|x| {
-                    let view_dir = Vector3 {
-                        x: (x as f64) - (IMG_SIZE as f64) / 2.0,
-                        y: (IMG_SIZE as f64) / 2.0 - (y as f64),
-                        z: -(IMG_SIZE as f64),
+    let mut window = Window::new(
+        "Noise Test - Press ESC to exit",
+        IMG_SIZE as usize,
+        IMG_SIZE as usize,
+        WindowOptions {
+            resize: true,
+            scale_mode: ScaleMode::UpperLeft,
+            ..WindowOptions::default()
+        },
+    )
+    .expect("Unable to create window");
+
+    // Limit to max ~60 fps update rate
+    window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
+
+    let mut buffer: Vec<u32> = vec![0; (IMG_SIZE * IMG_SIZE) as usize];
+
+    while window.is_open() && !window.is_key_down(Key::Escape) {
+        let rows: Vec<Vec<_>> = (0..IMG_SIZE)
+            .into_par_iter()
+            .map(|y| {
+                return (0..IMG_SIZE)
+                    .map(|x| {
+                        let view_dir = Vector3 {
+                            x: (x as f64) - (IMG_SIZE as f64) / 2.0,
+                            y: (IMG_SIZE as f64) / 2.0 - (y as f64),
+                            z: -(IMG_SIZE as f64),
+                        }
+                        .normalize();
+
+                        let ray_dir = view_dir * eye_rot;
+
+                        return get_color(eye, &objects, ray_dir, 0);
+                    })
+                    .collect();
+            })
+            .collect();
+
+        rows.iter().enumerate().for_each(|(y, row)| {
+            row.iter().enumerate().for_each(|(x, v)| {
+                let index = (y * (IMG_SIZE as usize) + x) as usize;
+                buffer[index] = (((v.x) as u32) << 16) | ((((v.y) as u32) << 8) | ((v.z) as u32));
+            });
+        });
+
+        window.get_keys().iter().for_each(|key| match key {
+            Key::W => {
+                eye = eye
+                    - Vector3 {
+                        x: 0.,
+                        y: 0.,
+                        z: 10.,
                     }
-                    .normalize();
+            }
+            Key::S => {
+                eye = eye
+                    + Vector3 {
+                        x: 0.,
+                        y: 0.,
+                        z: 10.,
+                    }
+            }
+            Key::A => {
+                eye = eye
+                    - Vector3 {
+                        x: 10.,
+                        y: 0.,
+                        z: 0.,
+                    }
+            }
+            Key::D => {
+                eye = eye
+                    + Vector3 {
+                        x: 10.,
+                        y: 0.,
+                        z: 0.,
+                    }
+            }
+            _ => (),
+        });
 
-                    let ray_dir = view_dir * eye_rot;
+        window.get_keys_released().iter().for_each(|key| match key {
+            Key::W => println!("released w!"),
+            Key::T => println!("released t!"),
+            _ => (),
+        });
 
-                    return get_color(EYE, &objects, ray_dir, 0);
-                })
-                .collect();
-        })
-        .collect();
-
-    let mut imgbuf = image::ImageBuffer::new(IMG_SIZE, IMG_SIZE);
-
-    for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
-        let color = rows[y as usize][x as usize];
-        *pixel = image::Rgb([color.x as u8, color.y as u8, color.z as u8]);
+        window
+            .update_with_buffer(&buffer, IMG_SIZE as usize, IMG_SIZE as usize)
+            .unwrap();
     }
-
-    imgbuf.save("test.png").unwrap();
 }
